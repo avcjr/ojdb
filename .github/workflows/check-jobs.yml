@@ -1,0 +1,42 @@
+name: Check OnlineJobs.ph for new postings
+
+on:
+  schedule:
+    # Every 5 minutes. GitHub may delay this slightly under load.
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}  # lets you trigger it manually from the Actions tab
+
+permissions:
+  contents: write  # needed so the workflow can commit state.json back
+
+concurrency:
+  group: oj-checker
+  cancel-in-progress: false  # don't cancel a run that's mid-commit
+
+jobs:
+  check-jobs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Run scraper
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python scraper.py
+
+      - name: Commit updated state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add state.json
+          git diff --staged --quiet || git commit -m "Update job state [skip ci]"
+          git push
